@@ -1,0 +1,24 @@
+{
+  "resources": [
+    {
+      "id": "bank_deposits",
+      "description": "Размещение средств единого казначейского счета на банковских депозитах",
+       "url": "https://roskazna.gov.ru/finansovye-operacii/razmeshchenie-sredstv-edinogo-kaznachejskogo-scheta/razmeshchenie-sredstv-edinogo-kaznachejskogo-scheta-na-bankovskih-depozitah",
+      "selectors": {
+        "title": ".raisin-funds #op-inform p",
+        "files": ".colleges__link",
+        "date": ".info-archive-table-block__title + p"
+      }
+    },
+        {
+      "id": "pensions_and_social_insurance",
+      "description": "Размещение средств Фонда пенсионного и социального страхования Российской Федерации на банковских депозитах",
+       "url": "https://roskazna.gov.ru/finansovye-operacii/razmeschenie-sredstv-fonda-pensionnogo-i-socialnogo-strahovaniya-rossiyskoy-federacii/razmeschenie-sredstv-fonda-pensionnogo-i-socialnogo-strahovaniya-rossiyskoy-federacii-na-bankovskih-depozitah",
+      "selectors": {
+        "title": ".raisin-funds #op-inform p",
+        "files": ".colleges__link",
+        "date": ".info-archive-table-block__title + p"
+      }
+    }
+  ]
+}
