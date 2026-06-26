@@ -5,8 +5,8 @@ import https from 'node:https';
 /**
  * Отказоустойчивая функция парсинга конкретной страницы
  * @param {string} url - Ссылка на страницу
- * @param {object} selectors - Объект { title, files } из JSON
- * @returns {Promise<{title: string, fileUrls: string[]}|null>}
+ * @param {object} selectors - Объект { title, files, date } из JSON
+ * @returns {Promise<{title: string, fileUrls: string[], date: string}|null>}
  */
 export async function scrapeWebsite(url, selectors) {
   try {
@@ -31,18 +31,24 @@ export async function scrapeWebsite(url, selectors) {
     const fileUrls = [];
     $(selectors.files).each((index, element) => {
       const href = $(element).attr('href');
-      if (href) {
-        const absoluteUrl = new URL(href, url).href;
-        fileUrls.push(absoluteUrl);
+      if (!href) return;
+      try {
+        fileUrls.push(new URL(href, url).href);
+      } catch {
+        console.warn(`[Scraper Warning] Некорректная ссылка "${href}" на странице: ${url}`);
       }
     });
 
-    if (fileUrls.length === 0) {
+    const uniqueFileUrls = [...new Set(fileUrls)];
+
+    if (uniqueFileUrls.length === 0) {
       console.warn(`[Scraper Warning] Файлы не найдены по селектору на странице: ${url}`);
       return null;
     }
 
-    return { title, fileUrls, date: $(selectors.date).text().trim() };
+    const date = selectors.date ? $(selectors.date).text().trim() : '';
+
+    return { title, fileUrls: uniqueFileUrls, date };
   } catch (error) {
     console.error(`[Scraper Error] Критическая ошибка при парсинге ${url}:`, error.message);
     return null;

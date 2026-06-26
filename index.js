@@ -5,7 +5,7 @@ import cron from "node-cron";
 import path from "node:path";
 import fs from "node:fs";
 import { processResource } from "./commands/process-resource.js";
-import { formatTitlesAndLinks } from "./utils/formatter.js";
+import { formatTitlesAndLinks, escapeHtml } from "./utils/formatter.js";
 
 if (!process.env.TOKEN) {
   throw new Error("TOKEN отсутствует в .env");
@@ -27,8 +27,8 @@ bot.start(async (ctx) => {
     const urls = db.getUrlsByResourceId(resource.id);
 
     ctx.reply(
-      `📌 *Раздел:* ${resource.description}\n📄\n ${formatTitlesAndLinks(urls)}`,
-      { parse_mode: "Markdown" },
+      `📌 <b>Раздел:</b> ${escapeHtml(resource.description)}\n📄\n${formatTitlesAndLinks(urls)}`,
+      { parse_mode: "HTML" },
     );
   });
 });
@@ -48,8 +48,8 @@ bot.command("check", (ctx) => {
     const urls = db.getUrlsByResourceId(resource.id);
 
     ctx.reply(
-      `📌 *Раздел:* ${resource.description}\n📄\n ${formatTitlesAndLinks(urls)}`,
-      { parse_mode: "Markdown" },
+      `📌 <b>Раздел:</b> ${escapeHtml(resource.description)}\n📄\n${formatTitlesAndLinks(urls)}`,
+      { parse_mode: "HTML" },
     );
   });
 });

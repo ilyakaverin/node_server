@@ -1,3 +1,15 @@
+/**
+ * Экранирует спецсимволы для Telegram parse_mode: "HTML".
+ * @param {string} text
+ * @returns {string}
+ */
+export function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 function getFileName(fileUrl, index) {
   try {
     const pathname = new URL(fileUrl).pathname;
@@ -15,7 +27,7 @@ export function formatTitlesAndLinks(urls) {
   return urls
     .map((fileUrl, index) => {
       const label = getFileName(fileUrl, index);
-      return `- [${label}](${fileUrl})`;
+      return `- <a href="${escapeHtml(fileUrl)}">${escapeHtml(label)}</a>`;
     })
     .join('\n');
 }
