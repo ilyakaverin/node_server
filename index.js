@@ -10,7 +10,7 @@ function loadScraperConfig() {
 }
 
 
-cron.schedule("*/1 * * * *", () => {
+cron.schedule("*/5 * * * *", () => {
   const { resources } = loadScraperConfig();
 
   resources.forEach((resource) => {
