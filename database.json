@@ -1,22 +1,13 @@
 {
-  "users": [
-    41850257,
-    60640999,
-    5147545918,
-    264943525,
-    749976081,
-    1133153165,
-    296944898,
-    586383630
-  ],
+  "users": [],
   "parsedFiles": {
+    "bank_deposits": [
+      "https://roskazna.gov.ru/storage/operation-day-files/20260703_183234640.docx",
+      "https://roskazna.gov.ru/storage/operation-day-files/20260703_183234540.xml"
+    ],
     "pensions_and_social_insurance": [
       "https://roskazna.gov.ru/storage/operation-day-files/20260619_113738107.docx",
       "https://roskazna.gov.ru/storage/operation-day-files/20260619_113737578.xml"
-    ],
-    "bank_deposits": [
-      "https://roskazna.gov.ru/storage/operation-day-files/20260626_193129704.docx",
-      "https://roskazna.gov.ru/storage/operation-day-files/20260626_193129569.xml"
     ]
   }
 }

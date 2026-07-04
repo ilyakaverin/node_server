@@ -39,17 +39,6 @@ function write(data) {
 }
 
 export const db = {
-  getUsers() {
-    return read().users;
-  },
-  addUser(chatId) {
-    const data = read();
-    if (!data.users.includes(chatId)) {
-      data.users.push(chatId);
-      write(data);
-    }
-  },
-
   /**
    * Проверяет, появились ли новые ссылки для конкретного ресурса
    * @param {string} resourceId - ID ресурса
@@ -77,14 +66,5 @@ export const db = {
     const data = read();
     data.parsedFiles[resourceId] = newUrls;
     write(data);
-  },
-
-  /**
-   * Возвращает массив сохраненных URL для конкретного ресурса
-   * @param {string} resourceId - ID ресурса
-   * @returns {string[]} - список URL
-   */
-  getUrlsByResourceId(resourceId) {
-    return read().parsedFiles[resourceId] || [];
   }
 };

@@ -1,66 +1,49 @@
 import { scrapeWebsite } from "../utils/scraper.js";
 import { db } from "../utils/db.js";
-import { formatTitlesAndLinks, escapeHtml } from "../utils/formatter.js";
+import { formatUpdateEmail } from "../utils/formatter.js";
+import { sendMail, getRecipients } from "../utils/mailer.js";
 
-export async function processResource(bot, resource, ctx) {
+export async function processResource(resource) {
   console.log(`\n--- [Старт обработки] Раздел: ${resource.id} ---`);
 
-  // scrapeWebsite сам перехватывает ошибки и возвращает null — отдельный try/catch не нужен.
   const response = await scrapeWebsite(resource.url, resource.selectors);
 
   if (!response) {
-    if (ctx) {
-      await ctx.reply(
-        `⚠️ <b>Ошибка:</b> Не удалось получить данные для раздела ${escapeHtml(resource.description)}`,
-        { parse_mode: "HTML" },
-      );
-    }
     console.error(`[Ошибка] Не удалось обработать раздел ${resource.id}`);
     return;
   }
 
-  const description = escapeHtml(resource.description);
-  const title = escapeHtml(response.title);
-  const date = escapeHtml(response.date);
-  const links = formatTitlesAndLinks(response.fileUrls);
-
   const isNewData = db.hasNewFiles(resource.id, response.fileUrls);
 
   if (!isNewData) {
-    if (ctx) {
-      await ctx.reply(
-        `📌 <b>Раздел:</b> ${description}\n📄 <b>Блок:</b> ${title}\n📅 <b>Дата:</b> ${date}\n${links}`,
-        { parse_mode: "HTML" },
-      );
-    }
-
     console.log(
       `[Пропуск] Изменений в разделе ${resource.id} не обнаружено. Ссылки уже есть в базе.`,
     );
     return;
   }
 
-  const users = db.getUsers();
-  const messageText = `📢 <b>Новое обновление!</b>\n\n📌 <b>Раздел:</b> ${description}\n📄 <b>Блок:</b> ${title}\n📅 <b>Дата:</b> ${date}\n${links}`;
+  const recipients = getRecipients();
+  const { subject, html } = formatUpdateEmail(resource, response);
 
-  let delivered = false;
-  for (const chatId of users) {
-    try {
-      await bot.telegram.sendMessage(chatId, messageText, {
-        parse_mode: "HTML",
-      });
-      delivered = true;
-    } catch (sendError) {
-      console.error(
-        `[Рассылка Ошибка] Не удалось отправить файлы пользователю ${chatId}:`,
-        sendError.message,
-      );
-    }
+  // Отправляем каждому получателю отдельно: сбой одного адреса не должен
+  // блокировать доставку остальным и приводить к повторной рассылке всем.
+  const results = await Promise.all(
+    recipients.map((to) => sendMail({ to, subject, html })),
+  );
+  const succeeded = results.filter(Boolean).length;
+  const failed = recipients.length - succeeded;
+  const delivered = succeeded > 0;
+
+  if (recipients.length > 0) {
+    console.log(
+      `[Рассылка] Раздел ${resource.id}: доставлено ${succeeded}/${recipients.length}` +
+        (failed > 0 ? ` (ошибок: ${failed})` : ""),
+    );
   }
 
   // Сохраняем как «просмотренное» только после успешной доставки (или если
   // получателей нет). Иначе сбой рассылки навсегда потерял бы это обновление.
-  if (delivered || users.length === 0) {
+  if (delivered || recipients.length === 0) {
     db.saveFiles(resource.id, response.fileUrls);
   }
 }
