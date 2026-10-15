@@ -3,13 +3,32 @@ import { db } from "../utils/db.js";
 import { formatUpdateEmail } from "../utils/formatter.js";
 import { sendMail, getRecipients } from "../utils/mailer.js";
 
-export async function processResource(resource) {
-  console.log(`\n--- [Старт обработки] Раздел: ${resource.id} ---`);
+const defaultDeps = { scrapeWebsite, db, sendMail, getRecipients };
+
+/**
+ * Парсит раздел и рассылает письмо, если на странице появились новые файлы.
+ * @param {object} resource - ресурс из configuration/resources.json
+ * @param {Partial<typeof defaultDeps>} [deps] - зависимости (подменяются в тестах)
+ */
+export async function processResource(resource, deps = {}) {
+  const { scrapeWebsite, db, sendMail, getRecipients } = { ...defaultDeps, ...deps };
+
+  console.log(`--- [Старт обработки] Раздел: ${resource.id} ---`);
 
   const response = await scrapeWebsite(resource.url, resource.selectors);
 
   if (!response) {
     console.error(`[Ошибка] Не удалось обработать раздел ${resource.id}`);
+    return;
+  }
+
+  // Новый раздел (или пустая база): запоминаем текущие файлы как исходное
+  // состояние, не рассылая письма о том, что уже было на странице.
+  if (!db.hasHistory(resource.id)) {
+    db.saveFiles(resource.id, response.fileUrls);
+    console.log(
+      `[Первый запуск] Раздел ${resource.id}: запомнено файлов: ${response.fileUrls.length}, письма не отправляются.`,
+    );
     return;
   }
 
