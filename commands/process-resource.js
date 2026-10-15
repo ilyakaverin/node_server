@@ -13,12 +13,22 @@ const defaultDeps = { scrapeWebsite, db, sendMail, getRecipients };
 export async function processResource(resource, deps = {}) {
   const { scrapeWebsite, db, sendMail, getRecipients } = { ...defaultDeps, ...deps };
 
-  console.log(`\n--- [Старт обработки] Раздел: ${resource.id} ---`);
+  console.log(`--- [Старт обработки] Раздел: ${resource.id} ---`);
 
   const response = await scrapeWebsite(resource.url, resource.selectors);
 
   if (!response) {
     console.error(`[Ошибка] Не удалось обработать раздел ${resource.id}`);
+    return;
+  }
+
+  // Новый раздел (или пустая база): запоминаем текущие файлы как исходное
+  // состояние, не рассылая письма о том, что уже было на странице.
+  if (!db.hasHistory(resource.id)) {
+    db.saveFiles(resource.id, response.fileUrls);
+    console.log(
+      `[Первый запуск] Раздел ${resource.id}: запомнено файлов: ${response.fileUrls.length}, письма не отправляются.`,
+    );
     return;
   }
 

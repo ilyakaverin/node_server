@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { checkMailerConfig, getRecipients } from "../utils/mailer.js";
+import { buildTransportOptions, checkMailerConfig, getRecipients } from "../utils/mailer.js";
 
 const ENV_KEYS = ["MAIL_TO", "SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS"];
 
@@ -52,5 +52,37 @@ describe("checkMailerConfig", () => {
 
     assert.deepEqual(checkMailerConfig(), []);
     assert.equal(warn.mock.callCount(), 0);
+  });
+});
+
+describe("buildTransportOptions", () => {
+  test("задаёт таймауты SMTP короче стандартных (2 и 10 минут)", () => {
+    const options = buildTransportOptions({});
+
+    assert.equal(options.connectionTimeout, 30_000);
+    assert.equal(options.greetingTimeout, 30_000);
+    assert.equal(options.socketTimeout, 60_000);
+  });
+
+  test("берёт параметры подключения из окружения", () => {
+    const options = buildTransportOptions({
+      SMTP_HOST: "smtp.example.com",
+      SMTP_PORT: "465",
+      SMTP_SECURE: "true",
+      SMTP_USER: "user",
+      SMTP_PASS: "pass",
+    });
+
+    assert.equal(options.host, "smtp.example.com");
+    assert.equal(options.port, 465);
+    assert.equal(options.secure, true);
+    assert.deepEqual(options.auth, { user: "user", pass: "pass" });
+  });
+
+  test("по умолчанию порт 587 без TLS", () => {
+    const options = buildTransportOptions({ SMTP_PORT: "не число" });
+
+    assert.equal(options.port, 587);
+    assert.equal(options.secure, false);
   });
 });

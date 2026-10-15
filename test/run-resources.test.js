@@ -1,6 +1,9 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
+import os from "node:os";
+import path from "node:path";
 import { loadScraperConfig, processAllResources } from "../commands/run-resources.js";
+import { resolvePath, rootDir } from "../utils/paths.js";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -41,6 +44,27 @@ describe("processAllResources", () => {
     });
 
     assert.deepEqual(finished.sort(), ["fast", "slow"]);
+  });
+});
+
+describe("пути", () => {
+  test("корень проекта — каталог с package.json", () => {
+    assert.equal(rootDir, path.resolve(import.meta.dirname, ".."));
+  });
+
+  test("resolvePath: относительные пути от корня проекта, абсолютные как есть", () => {
+    assert.equal(resolvePath(undefined, "database.json"), path.join(rootDir, "database.json"));
+    assert.equal(resolvePath("", "database.json"), path.join(rootDir, "database.json"));
+    assert.equal(resolvePath("data/db.json", "database.json"), path.join(rootDir, "data/db.json"));
+    assert.equal(resolvePath("/var/lib/kazna/db.json", "database.json"), "/var/lib/kazna/db.json");
+  });
+
+  test("конфигурация читается независимо от текущего каталога процесса", (t) => {
+    const cwd = process.cwd();
+    t.after(() => process.chdir(cwd));
+    process.chdir(os.tmpdir());
+
+    assert.ok(loadScraperConfig().resources.length > 0);
   });
 });
 

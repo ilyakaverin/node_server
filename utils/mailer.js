@@ -9,6 +9,14 @@ import nodemailer from "nodemailer";
 
 const requiredEnv = ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS"];
 
+// По умолчанию nodemailer ждёт соединения до 2 минут, а при бездействии сокета —
+// до 10 минут. Зависшая отправка на столько же задерживала бы следующие запуски.
+const SMTP_TIMEOUTS = {
+  connectionTimeout: 30_000,
+  greetingTimeout: 30_000,
+  socketTimeout: 60_000,
+};
+
 /**
  * Предупреждает о незаданных SMTP-переменных. Вызывается при старте приложения.
  * @returns {string[]} список отсутствующих переменных
@@ -23,16 +31,30 @@ export function checkMailerConfig() {
   return missing;
 }
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT) || 587,
-  secure: process.env.SMTP_SECURE === "true",
-  family: 4,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+/**
+ * Настройки SMTP-транспорта nodemailer из переменных окружения.
+ * @param {NodeJS.ProcessEnv} [env]
+ */
+export function buildTransportOptions(env = process.env) {
+  return {
+    host: env.SMTP_HOST,
+    port: Number(env.SMTP_PORT) || 587,
+    secure: env.SMTP_SECURE === "true",
+    family: 4,
+    auth: {
+      user: env.SMTP_USER,
+      pass: env.SMTP_PASS,
+    },
+    ...SMTP_TIMEOUTS,
+  };
+}
+
+let transporter;
+
+function getTransporter() {
+  transporter ??= nodemailer.createTransport(buildTransportOptions());
+  return transporter;
+}
 
 /**
  * Возвращает список получателей из MAIL_TO (через запятую).
@@ -52,7 +74,7 @@ export function getRecipients() {
  */
 export async function sendMail({ to, subject, html }) {
   try {
-    await transporter.sendMail({
+    await getTransporter().sendMail({
       from: process.env.MAIL_FROM || process.env.SMTP_USER,
       to,
       subject,

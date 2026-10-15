@@ -61,7 +61,18 @@ describe("db", () => {
     assert.equal(db.hasNewFiles("pensions_and_social_insurance", [A]), true);
   });
 
-  test("saveFiles заменяет список ресурса и не трогает остальные данные", (t) => {
+  test("hasHistory различает новые и уже обработанные ресурсы", (t) => {
+    const db = createDb(tmpDbPath(t));
+    assert.equal(db.hasHistory("bank_deposits"), false);
+
+    db.saveFiles("bank_deposits", [A]);
+
+    assert.equal(db.hasHistory("bank_deposits"), true);
+    assert.equal(db.hasHistory("pensions_and_social_insurance"), false);
+    assert.equal(db.hasHistory("toString"), false);
+  });
+
+  test("saveFiles заменяет список ресурса, сохраняет другие ресурсы и убирает старое поле users", (t) => {
     const dbPath = tmpDbPath(t);
     fs.writeFileSync(
       dbPath,
@@ -72,7 +83,7 @@ describe("db", () => {
     db.saveFiles("bank_deposits", [B]);
 
     const saved = JSON.parse(fs.readFileSync(dbPath, "utf-8"));
-    assert.deepEqual(saved, { users: [42], parsedFiles: { other: [C], bank_deposits: [B] } });
+    assert.deepEqual(saved, { parsedFiles: { other: [C], bank_deposits: [B] } });
   });
 
   test("запись не оставляет временный файл", (t) => {
@@ -85,14 +96,53 @@ describe("db", () => {
     assert.deepEqual(fs.readdirSync(path.dirname(dbPath)), ["database.json"]);
   });
 
-  test("повреждённый файл читается как пустая база с записью в лог", (t) => {
+  for (const [name, content] of [
+    ["невалидный JSON", "{ not json"],
+    ["пустой файл", ""],
+    ["JSON без parsedFiles", "{}"],
+    ["parsedFiles не объект", '{"parsedFiles": []}'],
+    ["JSON не объект", "null"],
+  ]) {
+    test(`повреждённая база (${name}) переносится в копию и читается как пустая`, (t) => {
+      const dbPath = tmpDbPath(t);
+      fs.writeFileSync(dbPath, content);
+      const errorLog = t.mock.method(console, "error", () => {});
+      const db = createDb(dbPath);
+
+      assert.equal(db.hasHistory("bank_deposits"), false);
+
+      const files = fs.readdirSync(path.dirname(dbPath));
+      assert.equal(files.length, 1);
+      assert.match(files[0], /^database\.json\.corrupt-\d{4}-\d{2}-\d{2}T[\d-]+Z$/);
+      assert.equal(fs.readFileSync(path.join(path.dirname(dbPath), files[0]), "utf-8"), content);
+      assert.equal(errorLog.mock.callCount(), 1);
+      assert.match(errorLog.mock.calls[0].arguments[0], /База повреждена.*Копия сохранена/);
+    });
+  }
+
+  test("после переноса повреждённой базы запись создаёт новую, копия не затирается", (t) => {
     const dbPath = tmpDbPath(t);
     fs.writeFileSync(dbPath, "{ not json");
-    const errorLog = t.mock.method(console, "error", () => {});
+    t.mock.method(console, "error", () => {});
     const db = createDb(dbPath);
 
-    assert.equal(db.hasNewFiles("bank_deposits", [A]), true);
-    assert.equal(errorLog.mock.callCount(), 1);
-    assert.match(errorLog.mock.calls[0].arguments[0], /Не удалось прочитать базу/);
+    db.saveFiles("bank_deposits", [A]);
+
+    const files = fs.readdirSync(path.dirname(dbPath)).sort();
+    assert.equal(files.length, 2);
+    assert.equal(files[0], "database.json");
+    assert.deepEqual(JSON.parse(fs.readFileSync(dbPath, "utf-8")), {
+      parsedFiles: { bank_deposits: [A] },
+    });
+  });
+
+  test("прочие ошибки чтения пробрасываются, файл не трогается", (t) => {
+    const dbPath = tmpDbPath(t);
+    fs.mkdirSync(dbPath); // вместо файла — каталог: EISDIR
+    const db = createDb(dbPath);
+
+    assert.throws(() => db.hasHistory("bank_deposits"), { code: "EISDIR" });
+    assert.throws(() => db.saveFiles("bank_deposits", [A]), { code: "EISDIR" });
+    assert.ok(fs.statSync(dbPath).isDirectory());
   });
 });

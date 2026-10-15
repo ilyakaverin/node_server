@@ -1,7 +1,10 @@
 import fs from 'node:fs';
-import path from 'node:path';
+import { resolvePath } from './paths.js';
 
-const defaultData = () => ({ users: [], parsedFiles: {} });
+const defaultData = () => ({ parsedFiles: {} });
+
+const isPlainObject = (value) =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * Создаёт хранилище поверх JSON-файла. Файл создаётся при первой записи.
@@ -9,21 +12,33 @@ const defaultData = () => ({ users: [], parsedFiles: {} });
  */
 export function createDb(dbPath) {
   /**
-   * Читает базу. При отсутствующем, повреждённом или нечитаемом файле
-   * возвращает пустую структуру, чтобы бот не падал на JSON.parse.
-   * @returns {{users: number[], parsedFiles: Record<string, string[]>}}
+   * Читает базу. Отсутствующий файл — пустая база. Повреждённый файл
+   * переносится в `<имя>.corrupt-<время>`, чтобы следующая запись его не
+   * затёрла, и база считается пустой. Прочие ошибки чтения (например, нет
+   * прав) пробрасываются: действовать по неизвестному состоянию нельзя.
+   * @returns {{parsedFiles: Record<string, string[]>}}
    */
   function read() {
+    let raw;
     try {
-      const data = JSON.parse(fs.readFileSync(dbPath, 'utf-8'));
-      return {
-        users: data.users || [],
-        parsedFiles: data.parsedFiles || {},
-      };
+      raw = fs.readFileSync(dbPath, 'utf-8');
     } catch (error) {
-      if (error.code !== 'ENOENT') {
-        console.error('[DB Error] Не удалось прочитать базу, использую пустую:', error.message);
+      if (error.code === 'ENOENT') return defaultData();
+      throw error;
+    }
+
+    try {
+      const data = JSON.parse(raw);
+      if (!isPlainObject(data) || !isPlainObject(data.parsedFiles)) {
+        throw new Error('ожидался объект с полем parsedFiles');
       }
+      return { parsedFiles: data.parsedFiles };
+    } catch (error) {
+      const backupPath = `${dbPath}.corrupt-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+      fs.renameSync(dbPath, backupPath);
+      console.error(
+        `[DB Error] База повреждена (${error.message}). Копия сохранена в ${backupPath}, начинаю с пустой базы.`,
+      );
       return defaultData();
     }
   }
@@ -40,6 +55,15 @@ export function createDb(dbPath) {
   }
 
   return {
+    /**
+     * Есть ли в базе история для ресурса (обрабатывался ли он раньше)
+     * @param {string} resourceId - ID ресурса
+     * @returns {boolean}
+     */
+    hasHistory(resourceId) {
+      return Object.hasOwn(read().parsedFiles, resourceId);
+    },
+
     /**
      * Проверяет, появились ли новые ссылки для конкретного ресурса
      * @param {string} resourceId - ID ресурса
@@ -71,4 +95,4 @@ export function createDb(dbPath) {
   };
 }
 
-export const db = createDb(process.env.DB_PATH || path.join(process.cwd(), 'database.json'));
+export const db = createDb(resolvePath(process.env.DB_PATH, 'database.json'));

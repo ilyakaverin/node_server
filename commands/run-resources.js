@@ -1,8 +1,8 @@
-import path from "node:path";
 import fs from "node:fs";
+import { resolvePath } from "../utils/paths.js";
 import { processResource } from "./process-resource.js";
 
-const defaultConfigPath = path.join(process.cwd(), "configuration/resources.json");
+const defaultConfigPath = resolvePath(process.env.CONFIG_PATH, "configuration/resources.json");
 
 export function loadScraperConfig(configPath = defaultConfigPath) {
   return JSON.parse(fs.readFileSync(configPath, "utf-8"));
