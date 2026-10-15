@@ -41,6 +41,14 @@ describe("checkMailerConfig", () => {
     assert.match(warn.mock.calls[0].arguments[0], /SMTP_USER, SMTP_PASS/);
   });
 
+  test("SMTP_PORT необязателен: по умолчанию используется 587", (t) => {
+    withEnv(t, { SMTP_HOST: "smtp.example.com", SMTP_USER: "user", SMTP_PASS: "pass" });
+    const warn = t.mock.method(console, "warn", () => {});
+
+    assert.deepEqual(checkMailerConfig(), []);
+    assert.equal(warn.mock.callCount(), 0);
+  });
+
   test("молчит, если всё задано", (t) => {
     withEnv(t, {
       SMTP_HOST: "smtp.example.com",

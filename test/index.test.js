@@ -10,7 +10,8 @@ import { fileURLToPath } from "node:url";
 
 // Сквозные тесты index.js: настоящий процесс, страница раздела — локальный сервер.
 
-const indexPath = fileURLToPath(new URL("../index.js", import.meta.url));
+const projectRoot = fileURLToPath(new URL("..", import.meta.url));
+const indexPath = path.join(projectRoot, "index.js");
 const { selectors } = JSON.parse(
   fs.readFileSync(new URL("../configuration/resources.json", import.meta.url), "utf-8"),
 ).resources[0];
@@ -63,12 +64,24 @@ after(() => {
   server.close();
 });
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 async function waitFor(check, what, timeoutMs = 10_000) {
   const deadline = Date.now() + timeoutMs;
   while (!check()) {
     if (Date.now() > deadline) throw new Error(`Не дождался: ${what}`);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await sleep(20);
   }
+}
+
+// Ждёт запроса приложения к /slow; если приложение завершилось раньше — падает сразу.
+function requestedOrExited(app) {
+  return Promise.race([
+    slowRequested.promise,
+    app.exited.then(([code]) => {
+      throw new Error(`Приложение завершилось с кодом ${code} до запроса:\n${app.output}`);
+    }),
+  ]);
 }
 
 function startApp(t, pagePath) {
@@ -82,13 +95,19 @@ function startApp(t, pagePath) {
     }),
   );
 
+  // Каталог запуска не корень проекта и лежит глубже него, а пути переданы
+  // относительно корня: если приложение разрешит их от cwd, они укажут в другое
+  // место и тест упадёт.
+  const cwd = path.join(dir, "cwd", ...projectRoot.split(path.sep).filter(Boolean));
+  fs.mkdirSync(cwd, { recursive: true });
+
   const child = spawn(process.execPath, [indexPath], {
-    cwd: dir, // не корень проекта: пути не должны зависеть от каталога запуска
+    cwd,
     // Минимальное окружение: без прокси и без реальных получателей писем.
     env: {
       PATH: process.env.PATH,
-      CONFIG_PATH: configPath,
-      DB_PATH: dbPath,
+      CONFIG_PATH: path.relative(projectRoot, configPath),
+      DB_PATH: path.relative(projectRoot, dbPath),
       MAIL_TO: "",
       SMTP_HOST: "127.0.0.1",
       SMTP_PORT: "1",
@@ -115,8 +134,11 @@ function startApp(t, pagePath) {
   return app;
 }
 
-describe("index.js", { timeout: 20_000 }, () => {
-  test("обрабатывает разделы сразу при старте и останавливается по SIGTERM", async (t) => {
+// Таймаут на каждом тесте: таймаут describe в Node 24 не прерывает зависший тест.
+const TIMEOUT = { timeout: 20_000 };
+
+describe("index.js", () => {
+  test("обрабатывает разделы сразу при старте и останавливается по SIGTERM", TIMEOUT, async (t) => {
     const app = startApp(t, "/page");
 
     await waitFor(() => app.savedFiles(), "сохранения файлов в базу");
@@ -131,11 +153,11 @@ describe("index.js", { timeout: 20_000 }, () => {
     assert.match(app.output, /\[Остановка\] Готово/);
   });
 
-  test("по SIGTERM дожидается завершения текущего запуска", async (t) => {
+  test("по SIGTERM дожидается завершения текущего запуска", TIMEOUT, async (t) => {
     slowReleased = resetSlow();
     const app = startApp(t, "/slow");
 
-    await slowRequested.promise;
+    await requestedOrExited(app);
     app.kill("SIGTERM");
     await waitFor(() => app.output.includes("[Остановка] Получен SIGTERM"), "начала остановки");
     assert.equal(app.savedFiles(), undefined);
@@ -147,13 +169,33 @@ describe("index.js", { timeout: 20_000 }, () => {
     assert.deepEqual(app.savedFiles(), [`${baseUrl}/a.docx`]);
   });
 
-  test("повторный сигнал завершает процесс немедленно", async (t) => {
+  // Под `npm start` один сигнал доходит до node дважды: напрямую и через npm.
+  test("дубль сигнала в течение секунды не прерывает текущий запуск", TIMEOUT, async (t) => {
     slowReleased = resetSlow();
     const app = startApp(t, "/slow");
 
-    await slowRequested.promise;
+    await requestedOrExited(app);
     app.kill("SIGTERM");
     await waitFor(() => app.output.includes("[Остановка] Получен SIGTERM"), "начала остановки");
+    app.kill("SIGTERM");
+    await sleep(200);
+    assert.doesNotMatch(app.output, /Повторный/);
+
+    releaseSlow();
+    const [code] = await app.exited;
+
+    assert.equal(code, 0, app.output);
+    assert.deepEqual(app.savedFiles(), [`${baseUrl}/a.docx`]);
+  });
+
+  test("повторный сигнал позже чем через секунду завершает процесс немедленно", TIMEOUT, async (t) => {
+    slowReleased = resetSlow();
+    const app = startApp(t, "/slow");
+
+    await requestedOrExited(app);
+    app.kill("SIGTERM");
+    await waitFor(() => app.output.includes("[Остановка] Получен SIGTERM"), "начала остановки");
+    await sleep(1100);
     app.kill("SIGINT");
     const [code] = await app.exited;
     releaseSlow();

@@ -7,7 +7,8 @@ import nodemailer from "nodemailer";
  *   MAIL_TO         — получатели через запятую
  */
 
-const requiredEnv = ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS"];
+// SMTP_PORT необязателен: по умолчанию 587 (см. buildTransportOptions).
+const requiredEnv = ["SMTP_HOST", "SMTP_USER", "SMTP_PASS"];
 
 // По умолчанию nodemailer ждёт соединения до 2 минут, а при бездействии сокета —
 // до 10 минут. Зависшая отправка на столько же задерживала бы следующие запуски.

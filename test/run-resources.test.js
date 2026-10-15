@@ -1,6 +1,5 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import os from "node:os";
 import path from "node:path";
 import { loadScraperConfig, processAllResources } from "../commands/run-resources.js";
 import { resolvePath, rootDir } from "../utils/paths.js";
@@ -33,8 +32,8 @@ describe("processAllResources", () => {
     );
   });
 
-  // На этом держится noOverlap в node-cron: запуск считается завершённым,
-  // только когда промис колбэка разрешился.
+  // На этом держится createJob (utils/job.js): запуск считается завершённым,
+  // только когда этот промис разрешился.
   test("завершается только после обработки всех ресурсов", async () => {
     const finished = [];
 
@@ -57,14 +56,6 @@ describe("пути", () => {
     assert.equal(resolvePath("", "database.json"), path.join(rootDir, "database.json"));
     assert.equal(resolvePath("data/db.json", "database.json"), path.join(rootDir, "data/db.json"));
     assert.equal(resolvePath("/var/lib/kazna/db.json", "database.json"), "/var/lib/kazna/db.json");
-  });
-
-  test("конфигурация читается независимо от текущего каталога процесса", (t) => {
-    const cwd = process.cwd();
-    t.after(() => process.chdir(cwd));
-    process.chdir(os.tmpdir());
-
-    assert.ok(loadScraperConfig().resources.length > 0);
   });
 });
 

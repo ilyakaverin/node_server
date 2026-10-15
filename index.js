@@ -21,16 +21,22 @@ job.run().catch((error) => {
   console.error("[Ошибка] Сбой запуска при старте:", error);
 });
 
-let stopping = false;
+// Повтор сигнала раньше этого срока — дубль того же запроса на остановку:
+// под `npm start` один Ctrl+C или `systemctl stop` доходит до node дважды
+// (напрямую и через npm), с разницей в доли миллисекунды.
+const DUPLICATE_SIGNAL_MS = 1000;
+
+let stopRequestedAt = null;
 
 // Корректная остановка: новые запуски не начинаем, текущий доводим до конца,
 // чтобы не оборвать рассылку до сохранения файлов в базу.
 async function shutdown(signal) {
-  if (stopping) {
+  if (stopRequestedAt !== null) {
+    if (Date.now() - stopRequestedAt < DUPLICATE_SIGNAL_MS) return;
     console.warn(`[Остановка] Повторный ${signal}, завершаю немедленно`);
     process.exit(1);
   }
-  stopping = true;
+  stopRequestedAt = Date.now();
   console.log(`[Остановка] Получен ${signal}, жду завершения текущего запуска...`);
   task.stop();
   await job.idle();
