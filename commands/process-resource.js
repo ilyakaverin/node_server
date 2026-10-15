@@ -3,7 +3,16 @@ import { db } from "../utils/db.js";
 import { formatUpdateEmail } from "../utils/formatter.js";
 import { sendMail, getRecipients } from "../utils/mailer.js";
 
-export async function processResource(resource) {
+const defaultDeps = { scrapeWebsite, db, sendMail, getRecipients };
+
+/**
+ * Парсит раздел и рассылает письмо, если на странице появились новые файлы.
+ * @param {object} resource - ресурс из configuration/resources.json
+ * @param {Partial<typeof defaultDeps>} [deps] - зависимости (подменяются в тестах)
+ */
+export async function processResource(resource, deps = {}) {
+  const { scrapeWebsite, db, sendMail, getRecipients } = { ...defaultDeps, ...deps };
+
   console.log(`\n--- [Старт обработки] Раздел: ${resource.id} ---`);
 
   const response = await scrapeWebsite(resource.url, resource.selectors);

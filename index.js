@@ -1,20 +1,18 @@
 import "dotenv/config";
 import cron from "node-cron";
-import path from "node:path";
-import fs from "node:fs";
-import { processResource } from "./commands/process-resource.js";
+import { checkMailerConfig } from "./utils/mailer.js";
+import { loadScraperConfig, processAllResources } from "./commands/run-resources.js";
 
-function loadScraperConfig() {
-  const configPath = path.join(process.cwd(), "configuration/resources.json");
-  return JSON.parse(fs.readFileSync(configPath, "utf-8"));
-}
+checkMailerConfig();
 
-
-cron.schedule("*/5 * * * *", () => {
-  const { resources } = loadScraperConfig();
-
-  resources.forEach((resource) => {
-    processResource(resource);
-  });
-});
-
+// noOverlap: пока предыдущий запуск не завершился (например, завис SMTP —
+// таймаут сокета в nodemailer 10 минут), новый пропускается. Иначе файлы ещё
+// не сохранены в базу и одно и то же обновление уйдёт письмом повторно.
+cron.schedule(
+  "*/5 * * * *",
+  async () => {
+    const { resources } = loadScraperConfig();
+    await processAllResources(resources);
+  },
+  { noOverlap: true },
+);

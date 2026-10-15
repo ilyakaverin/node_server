@@ -8,11 +8,19 @@ import nodemailer from "nodemailer";
  */
 
 const requiredEnv = ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS"];
-const missing = requiredEnv.filter((key) => !process.env[key]);
-if (missing.length > 0) {
-  console.warn(
-    `[Mailer] Отсутствуют переменные окружения: ${missing.join(", ")}. Отправка писем работать не будет.`,
-  );
+
+/**
+ * Предупреждает о незаданных SMTP-переменных. Вызывается при старте приложения.
+ * @returns {string[]} список отсутствующих переменных
+ */
+export function checkMailerConfig() {
+  const missing = requiredEnv.filter((key) => !process.env[key]);
+  if (missing.length > 0) {
+    console.warn(
+      `[Mailer] Отсутствуют переменные окружения: ${missing.join(", ")}. Отправка писем работать не будет.`,
+    );
+  }
+  return missing;
 }
 
 const transporter = nodemailer.createTransport({
