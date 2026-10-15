@@ -63,12 +63,24 @@ after(() => {
   server.close();
 });
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 async function waitFor(check, what, timeoutMs = 10_000) {
   const deadline = Date.now() + timeoutMs;
   while (!check()) {
     if (Date.now() > deadline) throw new Error(`Не дождался: ${what}`);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await sleep(20);
   }
+}
+
+// Ждёт запроса приложения к /slow; если приложение завершилось раньше — падает сразу.
+function requestedOrExited(app) {
+  return Promise.race([
+    slowRequested.promise,
+    app.exited.then(([code]) => {
+      throw new Error(`Приложение завершилось с кодом ${code} до запроса:\n${app.output}`);
+    }),
+  ]);
 }
 
 function startApp(t, pagePath) {
@@ -115,8 +127,11 @@ function startApp(t, pagePath) {
   return app;
 }
 
-describe("index.js", { timeout: 20_000 }, () => {
-  test("обрабатывает разделы сразу при старте и останавливается по SIGTERM", async (t) => {
+// Таймаут на каждом тесте: таймаут describe в Node 24 не прерывает зависший тест.
+const TIMEOUT = { timeout: 20_000 };
+
+describe("index.js", () => {
+  test("обрабатывает разделы сразу при старте и останавливается по SIGTERM", TIMEOUT, async (t) => {
     const app = startApp(t, "/page");
 
     await waitFor(() => app.savedFiles(), "сохранения файлов в базу");
@@ -131,11 +146,11 @@ describe("index.js", { timeout: 20_000 }, () => {
     assert.match(app.output, /\[Остановка\] Готово/);
   });
 
-  test("по SIGTERM дожидается завершения текущего запуска", async (t) => {
+  test("по SIGTERM дожидается завершения текущего запуска", TIMEOUT, async (t) => {
     slowReleased = resetSlow();
     const app = startApp(t, "/slow");
 
-    await slowRequested.promise;
+    await requestedOrExited(app);
     app.kill("SIGTERM");
     await waitFor(() => app.output.includes("[Остановка] Получен SIGTERM"), "начала остановки");
     assert.equal(app.savedFiles(), undefined);
@@ -147,13 +162,33 @@ describe("index.js", { timeout: 20_000 }, () => {
     assert.deepEqual(app.savedFiles(), [`${baseUrl}/a.docx`]);
   });
 
-  test("повторный сигнал завершает процесс немедленно", async (t) => {
+  // Под `npm start` один сигнал доходит до node дважды: напрямую и через npm.
+  test("дубль сигнала в течение секунды не прерывает текущий запуск", TIMEOUT, async (t) => {
     slowReleased = resetSlow();
     const app = startApp(t, "/slow");
 
-    await slowRequested.promise;
+    await requestedOrExited(app);
     app.kill("SIGTERM");
     await waitFor(() => app.output.includes("[Остановка] Получен SIGTERM"), "начала остановки");
+    app.kill("SIGTERM");
+    await sleep(200);
+    assert.doesNotMatch(app.output, /Повторный/);
+
+    releaseSlow();
+    const [code] = await app.exited;
+
+    assert.equal(code, 0, app.output);
+    assert.deepEqual(app.savedFiles(), [`${baseUrl}/a.docx`]);
+  });
+
+  test("повторный сигнал позже чем через секунду завершает процесс немедленно", TIMEOUT, async (t) => {
+    slowReleased = resetSlow();
+    const app = startApp(t, "/slow");
+
+    await requestedOrExited(app);
+    app.kill("SIGTERM");
+    await waitFor(() => app.output.includes("[Остановка] Получен SIGTERM"), "начала остановки");
+    await sleep(1100);
     app.kill("SIGINT");
     const [code] = await app.exited;
     releaseSlow();

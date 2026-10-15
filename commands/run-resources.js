@@ -12,7 +12,7 @@ export function loadScraperConfig(configPath = defaultConfigPath) {
  * Обрабатывает все ресурсы параллельно. Сбой одного ресурса логируется и не
  * мешает остальным: необработанный reject завершил бы процесс Node целиком.
  * Промис завершается только после обработки всех ресурсов — на этом держится
- * защита node-cron от наложения запусков (noOverlap).
+ * пропуск наложившихся запусков в createJob (utils/job.js).
  * @param {object[]} resources
  * @param {(resource: object) => Promise<void>} [handle]
  */
