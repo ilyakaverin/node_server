@@ -10,7 +10,8 @@ import { fileURLToPath } from "node:url";
 
 // Сквозные тесты index.js: настоящий процесс, страница раздела — локальный сервер.
 
-const indexPath = fileURLToPath(new URL("../index.js", import.meta.url));
+const projectRoot = fileURLToPath(new URL("..", import.meta.url));
+const indexPath = path.join(projectRoot, "index.js");
 const { selectors } = JSON.parse(
   fs.readFileSync(new URL("../configuration/resources.json", import.meta.url), "utf-8"),
 ).resources[0];
@@ -94,13 +95,19 @@ function startApp(t, pagePath) {
     }),
   );
 
+  // Каталог запуска не корень проекта и лежит глубже него, а пути переданы
+  // относительно корня: если приложение разрешит их от cwd, они укажут в другое
+  // место и тест упадёт.
+  const cwd = path.join(dir, "cwd", ...projectRoot.split(path.sep).filter(Boolean));
+  fs.mkdirSync(cwd, { recursive: true });
+
   const child = spawn(process.execPath, [indexPath], {
-    cwd: dir, // не корень проекта: пути не должны зависеть от каталога запуска
+    cwd,
     // Минимальное окружение: без прокси и без реальных получателей писем.
     env: {
       PATH: process.env.PATH,
-      CONFIG_PATH: configPath,
-      DB_PATH: dbPath,
+      CONFIG_PATH: path.relative(projectRoot, configPath),
+      DB_PATH: path.relative(projectRoot, dbPath),
       MAIL_TO: "",
       SMTP_HOST: "127.0.0.1",
       SMTP_PORT: "1",

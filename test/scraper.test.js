@@ -7,6 +7,9 @@ import os from "node:os";
 import path from "node:path";
 import { createHttpsAgent, loadCertificates, scrapeWebsite } from "../utils/scraper.js";
 
+// Запросы идут на локальные серверы: прокси из окружения разработчика не нужен.
+process.env.NO_PROXY = process.env.no_proxy = "*";
+
 // Селекторы берём из настоящего конфига, чтобы тесты ломались вместе с ним.
 const config = JSON.parse(
   fs.readFileSync(new URL("../configuration/resources.json", import.meta.url), "utf-8"),
